@@ -81,9 +81,7 @@ def init_kernel(frame_len: int,
     I = th.stack([th.eye(B), th.zeros(B, B)], dim=-1)
     # W x B x 2
     K = th.fft.fft(I / S, 1)
-    # realk = th.load('Kr.pt')
-    # imagk = th.load('Ki.pt')
-    # K = th.stack([realk, imagk], -1)
+    K = th.stack([K.real, K.imag], -1)
     if mode == "kaldi":
         K = K[:frame_len]
     if inverse and not normalized:
