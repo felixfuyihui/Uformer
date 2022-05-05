@@ -11,6 +11,7 @@ import librosa.filters as filters
 import soundfile as sf
 import librosa
 import sys
+import os
 sys.path.append(os.path.dirname(sys.path[0]) + '/model')
 
 EPSILON = 1e-5
@@ -81,7 +82,7 @@ def init_kernel(frame_len: int,
     I = th.stack([th.eye(B), th.zeros(B, B)], dim=-1)
     # W x B x 2
     K = th.fft.fft(I / S, 1)
-    K = th.stack([K.real, K.imag], -1)
+    K = th.cat([K.real, K.imag], -1)
     if mode == "kaldi":
         K = K[:frame_len]
     if inverse and not normalized:
