@@ -4,10 +4,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import os
-import sys
-import torch_complex
-from torch_complex import ComplexTensor
 
 
 EPSILON = torch.finfo(torch.float32).eps
@@ -71,16 +67,4 @@ class ComplexConv2d_Decoder(nn.Module):
         out_imag = out_imag[...,:inputs_imag.shape[-1]]
         return torch.stack([out_real, out_imag], -1)
 
-##之前是实虚实虚，现在是实实虚虚
-def complex_cat(inputs, axis):
-    
-    real, imag = [],[]
-    for idx, data in enumerate(inputs):
-        r, i = torch.chunk(data,2,axis)
-        real.append(r)
-        imag.append(i)
-    real = torch.cat(real,axis)
-    imag = torch.cat(imag,axis)
-    outputs = torch.cat([real, imag],axis)
-    return outputs
 
