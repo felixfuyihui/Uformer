@@ -18,10 +18,6 @@ sys.path.append(os.path.dirname(sys.path[0]) + '/model')
 from trans import STFT, iSTFT, MelTransform, inv_MelTransform
 from conv2d_cplx import ComplexConv2d_Encoder, ComplexConv2d_Decoder
 from conv2d_real import RealConv2d_Encoder, RealConv2d_Decoder
-from f_att_cplx import Multihead_Attention_F_Branch, Multihead_Attention_F_Branch_RICAT
-from t_att_cplx import Multihead_Attention_T_Branch, Multihead_Attention_T_Branch_RICAT
-from f_att_real import Multihead_Attention_F_Branch_real
-from t_att_real import Multihead_Attention_T_Branch_real
 from dilated_dualpath_conformer import Dilated_Dualpath_Conformer
 from fusion import fusion as fusion
 from show import show_model, show_params
@@ -33,252 +29,131 @@ def tanhextern(input):
 class Uformer(nn.Module):
 
     def __init__(self, 
-                win_len=512, 
-                win_inc=256, 
+                win_len=400, 
+                win_inc=160, 
                 fft_len=512, 
                 win_type='hanning', 
                 fid=None):
         super(Uformer, self).__init__()
         input_dim = win_len
         output_dim = win_len
-        self.kernel_num = [1,8,16,32,64]
-        self.padding_time_encoder = [1,2,2,2] #causal[1,2,2,2] noncausal[1,1,1,1]
-        self.padding_time_decoder = [0,0,0,0]
-        self.padding_fre_decoderout = [0,0,1,0]
-        # self.group = [1,2,4,8,16]
-        self.group = [1,1,1,1,1]
-        self.dilation = [1,1,1,1]
-
-        self.kernel_num_real = [1,16,32,64]
-        self.padding_time_encoder_real = [2,2,2]
-        self.padding_time_decoder_real = [0,0,0]
-        self.padding_fre_decoderout_real = [0,1,0]
-        self.dilation_real = [1,1,1]
-
-
+        self.kernel_num = [1,8,16,32,64,128,128]
+        self.kernel_num_real = [1,8,16,32,64,128]
         
         self.encoder = nn.ModuleList()
         self.decoder = nn.ModuleList()
         self.encoder_real = nn.ModuleList()
         self.decoder_real = nn.ModuleList()
-        self.encdec_att = nn.ModuleList()
-        self.encdec_att_real = nn.ModuleList()
         for idx in range(len(self.kernel_num)-1):
-            if idx < 2:
-                self.encoder.append(
-                    nn.Sequential(
-                        ComplexConv2d_Encoder(
-                            self.kernel_num[idx],
-                            self.kernel_num[idx+1],
-                            kernel_size=(6, 3),
-                            stride=(3, 1),
-                            padding=(0, self.padding_time_encoder[idx]),
-                            dilation=(1, 1),
-                            groups = self.group[idx]
-                        ),
-                        nn.BatchNorm3d(self.kernel_num[idx+1]),
-                        nn.PReLU()
-                    )
+            self.encoder.append(
+                nn.Sequential(
+                    ComplexConv2d_Encoder(
+                        self.kernel_num[idx],
+                        self.kernel_num[idx+1],
+                        kernel_size=(5, 2),
+                        stride=(2, 1),
+                        padding=(2, 1),
+                        dilation=(1, 1),
+                        groups = 1
+                    ),
+                    nn.BatchNorm3d(self.kernel_num[idx+1]),
+                    nn.PReLU()
                 )
-            else:
-                self.encoder.append(
-                    nn.Sequential(
-                        ComplexConv2d_Encoder(
-                            self.kernel_num[idx],
-                            self.kernel_num[idx+1],
-                            kernel_size=(4, 3),
-                            stride=(2, 1),
-                            padding=(0, self.padding_time_encoder[idx]),
-                            dilation=(1, 1),
-                            groups = self.group[idx]
-                        ),
-                        nn.BatchNorm3d(self.kernel_num[idx+1]),
-                        nn.PReLU()
-                    )
-                )
+            )
 
         for idx in range(len(self.kernel_num)-1):
-            if idx < 2:
-                self.encoder_real.append(
-                    nn.Sequential(
-                        RealConv2d_Encoder(
-                            self.kernel_num[idx],
-                            self.kernel_num[idx+1],
-                            kernel_size=(6, 3),
-                            stride=(3, 1),
-                            padding=(0, self.padding_time_encoder[idx]),
-                            dilation=(1, 1),
-                            groups = self.group[idx]
-                        ),
-                        nn.BatchNorm2d(self.kernel_num[idx+1]),
-                        nn.PReLU()
-                    )
+            self.encoder_real.append(
+                nn.Sequential(
+                    RealConv2d_Encoder(
+                        self.kernel_num[idx],
+                        self.kernel_num[idx+1],
+                        kernel_size=(5, 2),
+                        stride=(2, 1),
+                        padding=(2,1),
+                        dilation=(1, 1),
+                        groups = 1
+                    ),
+                    nn.BatchNorm2d(self.kernel_num[idx+1]),
+                    nn.PReLU()
                 )
-            else:
-                self.encoder_real.append(
-                    nn.Sequential(
-                        RealConv2d_Encoder(
-                            self.kernel_num[idx],
-                            self.kernel_num[idx+1],
-                            kernel_size=(4, 3),
-                            stride=(2, 1),
-                            padding=(0, self.padding_time_encoder[idx]),
-                            dilation=(1, 1),
-                            groups = self.group[idx]
-                        ),
-                        nn.BatchNorm2d(self.kernel_num[idx+1]),
-                        nn.PReLU()
-                    )
-                )
+            )
 
         
-        self.conformer1 = Dilated_Dualpath_Conformer()
-        self.conformer2 = Dilated_Dualpath_Conformer()
+        self.conformer = Dilated_Dualpath_Conformer()
 
 
         for idx in range(len(self.kernel_num)-1, 0, -1):
-            if idx > 2:
+            if idx >= 2:
                 self.decoder.append(
                     nn.Sequential(
                         ComplexConv2d_Decoder(
                         self.kernel_num[idx]*2,
                         self.kernel_num[idx-1],
-                        kernel_size =(4, 3),
+                        kernel_size =(5, 2),
                         stride=(2,1),
-                        padding=(0, self.padding_time_decoder[idx-1]),
-                        output_padding = (self.padding_fre_decoderout[idx-1], 0),
-                        dilation=(1, self.dilation[idx-1]),
-                        groups = self.group[idx-1]
-                    ),  
-                    nn.BatchNorm3d(self.kernel_num[idx-1]),
-                    #nn.ELU()
-                    nn.PReLU()
-                    )
-                )
-            elif idx == 2:
-                self.decoder.append(
-                    nn.Sequential(
-                        ComplexConv2d_Decoder(
-                        self.kernel_num[idx]*2,
-                        self.kernel_num[idx-1],
-                        kernel_size =(6, 3),
-                        stride=(3,1),
-                        padding=(0, self.padding_time_decoder[idx-1]),
+                        padding=(2, 0),
                         output_padding = (1, 0),
-                        dilation=(1, self.dilation[idx-1]),
-                        groups = self.group[idx-1]
-                    ),  
-                    nn.BatchNorm3d(self.kernel_num[idx-1]),
-                    #nn.ELU()
-                    nn.PReLU()
-                    )
-                )
-            elif idx == 1:
-                self.decoder.append(
-                    nn.Sequential(
-                        ComplexConv2d_Decoder(
-                        self.kernel_num[idx]*2,
-                        self.kernel_num[idx-1],
-                        # 2,
-                        kernel_size =(6, 3),
-                        stride=(3,1),
-                        padding=(0, self.padding_time_decoder[idx-1]),
-                        output_padding = (2, 0),
-                        dilation=(1, self.dilation[idx-1]),
-                        groups = self.group[idx-1]
-                    ),  
-                    )
-                )
-
-        for idx in range(len(self.kernel_num)-1, 0, -1):
-            if idx > 2:
-                self.decoder_real.append(
-                    nn.Sequential(
-                        RealConv2d_Decoder(
-                        self.kernel_num[idx]*2,
-                        self.kernel_num[idx-1],
-                        kernel_size =(4, 3),
-                        stride=(2,1),
-                        padding=(0, self.padding_time_decoder[idx-1]),
-                        output_padding = (self.padding_fre_decoderout[idx-1], 0),
-                        dilation=(1, self.dilation[idx-1]),
-                        groups = self.group[idx-1]
-                    ),  
-                    nn.BatchNorm2d(self.kernel_num[idx-1]),
-                    #nn.ELU()
-                    nn.PReLU()
-                    )
-                )
-            elif idx == 2:
-                self.decoder_real.append(
-                    nn.Sequential(
-                        RealConv2d_Decoder(
-                        self.kernel_num[idx]*2,
-                        self.kernel_num[idx-1],
-                        kernel_size =(6, 3),
-                        stride=(3,1),
-                        padding=(0, self.padding_time_decoder[idx-1]),
-                        output_padding = (1, 0),
-                        dilation=(1, self.dilation[idx-1]),
-                        groups = 1#self.group[idx-1]
-                    ),  
-                    nn.BatchNorm2d(self.kernel_num[idx-1]),
-                    #nn.ELU()
-                    nn.PReLU()
-                    )
-                )
-            elif idx == 1:
-                self.decoder_real.append(
-                    nn.Sequential(
-                        RealConv2d_Decoder(
-                        self.kernel_num[idx]*2,
-                        self.kernel_num[idx-1],
-                        # 2,
-                        kernel_size =(6, 3),
-                        stride=(3,1),
-                        padding=(0, self.padding_time_decoder[idx-1]),
-                        output_padding = (2, 0),
-                        dilation=(1, self.dilation[idx-1]),
-                        groups = 1#self.group[idx-1]
-                    ),  
-                    )
-                )
-        self.encdec_kernelnum = [128*3, 64*4, 32*8, 16*10]
-        self.encdec_groupnum = [3, 4, 8, 10]
-        self.encdec_pad = [0, 2, 1, 1]
-        for idx in range(len(self.encdec_kernelnum)):
-            self.encdec_att.append(
-                nn.Sequential(
-                ComplexConv2d_Encoder(
-                            self.encdec_kernelnum[idx],
-                            self.encdec_kernelnum[idx],
-                            kernel_size=(2, 3),
-                            stride=(1, 1),
-                            padding=(1, 1),
-                            dilation=(1, 1),
-                            groups = 1#self.encdec_groupnum[idx]
-                        ),
-                        nn.BatchNorm3d(self.encdec_kernelnum[idx]),
-                        # nn.PReLU()
-                        nn.Sigmoid(),
-                        )
-                )
-        for idx in range(len(self.encdec_kernelnum)):
-            self.encdec_att_real.append(
-                    nn.Sequential(
-                    RealConv2d_Encoder(
-                        self.encdec_kernelnum[idx],
-                        self.encdec_kernelnum[idx],
-                        kernel_size=(2, 3),
-                        stride=(1, 1),
-                        padding=(1, 1),
                         dilation=(1, 1),
-                        groups = 1#self.encdec_groupnum[idx]
-                    ),
-                    nn.BatchNorm2d(self.encdec_kernelnum[idx]),
-                    nn.Sigmoid(),
+                        groups = 1
+                    ),  
+                    nn.BatchNorm3d(self.kernel_num[idx-1]),
+                    #nn.ELU()
+                    nn.PReLU()
                     )
                 )
+          
+            else:
+                self.decoder.append(
+                    nn.Sequential(
+                        ComplexConv2d_Decoder(
+                        self.kernel_num[idx]*2,
+                        self.kernel_num[idx-1],
+                        kernel_size =(5, 2),
+                        stride=(2,1),
+                        padding=(2, 0),
+                        output_padding = (1, 0),
+                        dilation=(1, 1),
+                        groups = 1
+                    ),  
+                    )
+                )
+
+        for idx in range(len(self.kernel_num)-1, 0, -1):
+            if idx >= 2:
+                self.decoder_real.append(
+                    nn.Sequential(
+                        RealConv2d_Decoder(
+                        self.kernel_num[idx]*2,
+                        self.kernel_num[idx-1],
+                        kernel_size =(5, 2),
+                        stride=(2,1),
+                        padding=(2,0),
+                        output_padding = (1, 0),
+                        dilation=(1, 1),
+                        groups = 1
+                    ),  
+                    nn.BatchNorm2d(self.kernel_num[idx-1]),
+                    #nn.ELU()
+                    nn.PReLU()
+                    )
+                )
+        
+            else:
+                self.decoder_real.append(
+                    nn.Sequential(
+                        RealConv2d_Decoder(
+                        self.kernel_num[idx]*2,
+                        self.kernel_num[idx-1],
+                        kernel_size =(5, 2),
+                        stride=(2,1),
+                        padding=(2,0),
+                        output_padding = (1, 0),
+                        dilation=(1, 1),
+                        groups = 1
+                    ),  
+                    )
+                )
+
                 
 
         self.stft = STFT(frame_len=win_len, frame_hop=win_inc)
@@ -292,6 +167,7 @@ class Uformer(nn.Module):
 
     def forward(self, inputs, src):
         warnings.filterwarnings('ignore')
+        
 
         inputs_real, inputs_imag = self.stft(inputs[:,0].unsqueeze(1))
         src_real, src_imag = self.stft(src[:,0])
@@ -316,7 +192,7 @@ class Uformer(nn.Module):
 
 
 
-        
+    
 
         out = torch.stack([inputs_real, inputs_imag], -1) # B C F T 2
         out = out[:, :, 1:]
@@ -333,34 +209,14 @@ class Uformer(nn.Module):
 
 
 
-        out, mag = self.conformer1(out, mag)
-        out, mag = self.conformer2(out, mag)
+        out, mag = self.conformer(out, mag)
         
         for idx in range(len(self.decoder)):
             out_cat = torch.cat([encoder_out[-1 - idx],out],1)
-            freqnum = out_cat.shape[2]
-            out = F.pad(out_cat, (0,0,0,0,0,self.encdec_pad[idx]))
-            out = out.chunk(self.encdec_groupnum[idx],2) 
-            out = torch.cat(out, 1) # B C*S F' T 2
-
-            out = self.encdec_att[idx](out)
-            out = out.chunk(self.encdec_groupnum[idx],1) 
-            out = torch.cat(out, 2) # B C F T 2 
-            out = out[:, :, :freqnum]
-            out = out * out_cat
-            out = self.decoder[idx](out)
+            out = self.decoder[idx](out_cat)
          
             mag_cat = torch.cat([mag_out[-1 - idx],mag],1)
-            freqnum = mag_cat.shape[2]
-            mag = F.pad(mag_cat, (0,0,0,self.encdec_pad[idx]))
-            mag = mag.chunk(self.encdec_groupnum[idx],2) 
-            mag = torch.cat(mag, 1) # B C*S F' T 2
-            mag = self.encdec_att_real[idx](mag)
-            mag = mag.chunk(self.encdec_groupnum[idx],1) 
-            mag = torch.cat(mag, 2) # B C F T
-            mag = mag[:, :, :freqnum]
-            mag = mag * mag_cat
-            mag = self.decoder_real[idx](mag)
+            mag = self.decoder_real[idx](mag_cat)
 
             out, mag = fusion(out, mag)
 
@@ -370,8 +226,6 @@ class Uformer(nn.Module):
         mag = F.pad(mag, [0,0,1,0])
 
         mag = mag[:,0] * mag_input[0][:,0]
-
-
 
         mask_real = out[...,0]
         mask_imag = out[...,1]
@@ -447,7 +301,8 @@ if __name__ == '__main__':
     import numpy as np
 
     net = Uformer()
-    inputs = torch.randn([10,1,64000*3])
+    inputs = torch.randn([10,1,64000])
+    print(inputs.shape)
     outputs = net(inputs,inputs)
 
 
