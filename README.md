@@ -11,3 +11,8 @@ Please cite the paper if you want to follow the idea or results:
             journal={arXiv preprint arXiv:2111.06015},
             year={2021}
             }
+
+2022.6.18
+I make some modifications of the model including:
+1. Replace local temporal attention with global temporal attention.
+2. Cancel Encoder Decoder Attention to reduce the amount of parameter.
