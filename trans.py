@@ -742,27 +742,24 @@ class inv_MelTransform(nn.Module):
         fbank = tf.linear(linear, self.filters.cuda(), bias=None)
         return fbank
 
-if __name__ == '__main__':
-    transform = STFT(400, 160)
-    itransform = iSTFT(400, 160)
+# if __name__ == '__main__':
+#     transform = STFT(400, 160)
+#     itransform = iSTFT(400, 160)
 
-    y, fs = sf.read('in.wav')
+#     y, fs = sf.read('in.wav')
 
-    y = librosa.resample(y, fs, 48000)
-
-    y = th.from_numpy(y)
-    y = y.float()
-    y = y.unsqueeze(0).unsqueeze(0)
-    r,i = transform(y)
-    r,i = r.transpose(2,3),i.transpose(2,3)
-    mag, pha = (r**2+i**2)**0.5, th.atan2(i,r)
+#     y = th.from_numpy(y)
+#     y = y.float()
+#     y = y.unsqueeze(0).unsqueeze(0)
+#     r,i = transform(y)
+#     r,i = r.transpose(2,3),i.transpose(2,3)
+#     mag, pha = (r**2+i**2)**0.5, th.atan2(i,r)
 
 
 
-    r, i = mag * th.cos(pha), mag * th.sin(pha)
-    r,i = r.transpose(2,3),i.transpose(2,3)
-    y = itransform((r.squeeze(0),i.squeeze(0)))
-    y = y.squeeze().cpu()
-    y = np.array(y)
-    y = librosa.resample(y, 48000, fs)
-    sf.write('out.wav',y,fs)
+#     r, i = mag * th.cos(pha), mag * th.sin(pha)
+#     r,i = r.transpose(2,3),i.transpose(2,3)
+#     y = itransform((r.squeeze(0),i.squeeze(0)))
+#     y = y.squeeze().cpu()
+#     y = np.array(y)
+#     sf.write('out.wav',y,fs)
