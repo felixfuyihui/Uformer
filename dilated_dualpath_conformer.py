@@ -35,12 +35,12 @@ class Dilated_Dualpath_Conformer(nn.Module):
         self.mag_fatt = Multihead_Attention_F_Branch_real(inchannel, 16)
 
     
-        dilation = [1, 2, 4, 8]
+        dilation = [1, 2, 4, 8, 16, 32, 64, 128]
         self.dsconv_cplx = nn.ModuleList()
-        for idx in range(4):
+        for idx in range(len(dilation)):
             self.dsconv_cplx.append(DSConv2d(inchannel, 32, dilation1=dilation[idx], dilation2=dilation[len(dilation)-idx-1]))
         self.dsconv_real = nn.ModuleList()
-        for idx in range(4):
+        for idx in range(len(dilation)):
             self.dsconv_real.append(DSConv2d_Real(inchannel, 32, dilation1=dilation[idx], dilation2=dilation[len(dilation)-idx-1]))
 
 
