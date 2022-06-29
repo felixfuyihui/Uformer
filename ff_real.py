@@ -29,7 +29,7 @@ class FF_Real(nn.Module):
         y = self.linear2(y)
         y = self.dropout(y)
         y = y.transpose(1, 3)
-        y = y + x
+        y = y*0.5 + x
         return y
 
 if __name__ == '__main__':
