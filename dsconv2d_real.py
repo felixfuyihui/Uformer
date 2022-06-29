@@ -56,7 +56,7 @@ class DSConv2d_Real(nn.Module):
         y = y * torch.sigmoid(y)
         y = self.sconv(y)
         y = self.dropout(y)
-        x = x + y
+        y = x + y
         return y
 
 if __name__ == '__main__':
