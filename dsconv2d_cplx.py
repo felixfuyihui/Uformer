@@ -4,8 +4,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import os
-import sys
 
 from conv2d_cplx import ComplexConv2d_Encoder
 EPSILON = torch.finfo(torch.float32).eps
@@ -58,7 +56,7 @@ class DSConv2d(nn.Module):
         y = y * torch.sigmoid(y)
         y = self.sconv(y)
         y = self.dropout(y)
-        x = x + y
+        y = x + y
         return y
 
 if __name__ == '__main__':
