@@ -16,3 +16,4 @@ Please cite the paper if you want to follow the idea or results:
 I make some modifications of the model including:
 1. Replace local temporal attention with global temporal attention.
 2. Cancel Encoder Decoder Attention to reduce the amount of parameter.
+3. Change some activation function and norm function.
